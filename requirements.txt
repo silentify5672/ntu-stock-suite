@@ -1,3 +1,5 @@
 yfinance
+yahoo_fin
 pandas
 streamlit
+requests-html
