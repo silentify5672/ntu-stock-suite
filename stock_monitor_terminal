@@ -1,0 +1,108 @@
+import sys
+import subprocess
+import os
+import time
+
+# --- 1. THE AUTO-INSTALLER ---
+# This ensures anyone who downloads your code can run it immediately.
+def install_missing_modules():
+    required = ["yfinance", "yahoo_fin", "requests_html", "pandas"]
+    for module in required:
+        try:
+            __import__(module)
+        except ImportError:
+            print(f"Wait! Tool missing: Installing {module}...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", module])
+
+install_missing_modules()
+
+# Now we import the tools we just checked/installed
+import yfinance as yf
+import yahoo_fin.stock_info as si
+
+# --- 2. FEATURE: REAL-TIME MONITOR ---
+def track_live_stock():
+    symbol = input("\nEnter Stock Ticker (e.g., AAPL): ").upper()
+    print(f"Tracking {symbol}... Press Ctrl+C to return to menu.")
+    try:
+        while True:
+            stock = yf.Ticker(symbol)
+            data = stock.history(period="1d", interval="1m")
+            if not data.empty:
+                price = data['Close'].iloc[-1]
+                # \r overwrites the line, end="" keeps us on the same line
+                print(f"\r{symbol} Current Price: ${price:.2f} | Time: {time.strftime('%H:%M:%S')}", end="")
+                sys.stdout.flush()
+            time.sleep(10)
+    except KeyboardInterrupt:
+        print(f"\nStopped tracking {symbol}.")
+
+# --- 3. FEATURE: TOP MOVERS ---
+def show_top_movers():
+    print("\nFetching today's biggest winners and losers...")
+    try:
+        gainers = si.get_day_gainers().head(10)
+        losers = si.get_day_losers().head(10)
+        
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("=== TOP 10 GAINERS ===")
+        for i, row in gainers.iterrows():
+            print(f"{row['Symbol']:<6} | ${row['Price (Intraday)']:>8.2f} | +{row['% Change']}%")
+            
+        print("\n=== TOP 10 LOSERS ===")
+        for i, row in losers.iterrows():
+            print(f"{row['Symbol']:<6} | ${row['Price (Intraday)']:>8.2f} | {row['% Change']}%")
+        
+        input("\nPress Enter to return to menu...")
+    except Exception as e:
+        print(f"Error: {e}")
+        time.sleep(2)
+
+# --- 4. FEATURE: COMPARISON ---
+def compare_stocks():
+    raw_input = input("\nEnter tickers separated by commas (e.g., TSLA, GOOGL, AMZN): ")
+    tickers = raw_input.replace(" ", "").upper().split(",")
+    
+    print("\n" + "-"*50)
+    print(f"{'TICKER':<8} | {'PRICE':<10} | {'24H CHANGE'}")
+    print("-"*50)
+
+    for symbol in tickers:
+        try:
+            stock = yf.Ticker(symbol)
+            hist = stock.history(period="2d")
+            if len(hist) >= 2:
+                old_p = hist['Close'].iloc[-2]
+                new_p = hist['Close'].iloc[-1]
+                diff = ((new_p - old_p) / old_p) * 100
+                sign = "+" if diff > 0 else ""
+                print(f"{symbol:<8} | ${new_p:>8.2f} | {sign}{diff:.2f}%")
+        except:
+            print(f"{symbol:<8} | Error fetching data")
+    
+    print("-"*50)
+    input("Press Enter to return to menu...")
+
+# --- 5. THE MAIN MENU ---
+def main_menu():
+    while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("================================")
+        print("   NTU CS PRE-TERM STOCK TOOL   ")
+        print("================================")
+        print("1. Live Price Monitor (Single)")
+        print("2. Market Movers (Top 10)")
+        print("3. Compare Multiple Stocks")
+        print("4. Exit")
+        
+        choice = input("\nChoose an option: ")
+        
+        if choice == '1': track_live_stock()
+        elif choice == '2': show_top_movers()
+        elif choice == '3': compare_stocks()
+        elif choice == '4': 
+            print("Cleaning up... Good luck at NTU!")
+            break
+
+if __name__ == "__main__":
+    main_menu()

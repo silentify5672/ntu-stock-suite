@@ -1,0 +1,93 @@
+import sys
+import subprocess
+import os
+
+# --- 1. THE AUTO-INSTALLER (For Local Computers) ---
+def install_missing_modules():
+    # We only run this if we are NOT on a professional cloud server
+    if not os.environ.get("STREAMLIT_RUNTIME_CHECK"):
+        required = ["yfinance", "yahoo_fin", "requests_html", "pandas", "streamlit"]
+        for module in required:
+            try:
+                __import__(module)
+            except ImportError:
+                print(f"Installing {module} for local environment...")
+                subprocess.check_call([sys.executable, "-m", "pip", "install", module])
+
+# Run the check
+install_missing_modules()
+
+# Now we import our tools
+import streamlit as st
+import yfinance as yf
+import yahoo_fin.stock_info as si
+import pandas as pd
+
+# --- 2. WEBSITE SETTINGS ---
+st.set_page_config(page_title="NTU Stock Dashboard", layout="wide", page_icon="📈")
+
+st.title("🚀 My NTU Pre-Term Stock Dashboard")
+st.write("An interactive web app to track the global stock market.")
+
+# --- 3. SIDEBAR NAVIGATION ---
+st.sidebar.header("Navigation")
+feature = st.sidebar.radio("Go to:", ["Live Monitor & Charts", "Top 10 Movers", "Compare Stocks"])
+
+# --- 4. FEATURE: LIVE MONITOR & CHARTS ---
+if feature == "Live Monitor & Charts":
+    st.header("📊 Real-Time Price & Trends")
+    ticker = st.text_input("Enter Ticker (e.g., TSLA, NVDA, AAPL)", "AAPL").upper()
+    
+    timeframe = st.selectbox("Select Duration", 
+                             ["1d", "5d", "1mo", "6mo", "1y", "max"],
+                             index=0)
+
+    if ticker:
+        stock = yf.Ticker(ticker)
+        interval = "1m" if timeframe == "1d" else "1d"
+        df = stock.history(period=timeframe, interval=interval)
+
+        if not df.empty:
+            # Metric Card
+            current_price = df['Close'].iloc[-1]
+            open_price = df['Close'].iloc[0]
+            st.metric(label=f"Price: {ticker}", value=f"${current_price:.2f}", delta=f"{current_price - open_price:.2f}")
+            
+            # Interactive Chart
+            st.subheader(f"Price Movement ({timeframe})")
+            st.line_chart(df['Close'])
+        else:
+            st.error("Ticker not found.")
+
+# --- 5. FEATURE: TOP MOVERS ---
+elif feature == "Top 10 Movers":
+    st.header("🔥 Market Movers")
+    try:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success("### Top Gainers")
+            st.dataframe(si.get_day_gainers().head(10)[['Symbol', 'Price (Intraday)', '% Change']])
+        with col2:
+            st.error("### Top Losers")
+            st.dataframe(si.get_day_losers().head(10)[['Symbol', 'Price (Intraday)', '% Change']])
+    except:
+        st.warning("Market data currently unavailable (Market might be closed).")
+
+# --- 6. FEATURE: COMPARE STOCKS ---
+elif feature == "Compare Stocks":
+    st.header("⚖️ Compare Side-by-Side")
+    raw_input = st.text_input("Enter tickers (e.g., AAPL, MSFT, TSLA)", "AAPL, MSFT")
+    
+    if raw_input:
+        tickers = [t.strip().upper() for t in raw_input.split(",")]
+        data_list = []
+        for t in tickers:
+            s = yf.Ticker(t)
+            h = s.history(period="1d")
+            if not h.empty:
+                data_list.append({"Ticker": t, "Price": h['Close'].iloc[-1]})
+        
+        if data_list:
+            df_comp = pd.DataFrame(data_list)
+            st.table(df_comp)
+            st.bar_chart(df_comp.set_index('Ticker'))
